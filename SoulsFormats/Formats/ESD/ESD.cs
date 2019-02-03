@@ -1,8 +1,9 @@
-﻿using System;
+﻿using SoulsFormats.Formats.ESD.EzSemble;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SoulsFormats
+namespace SoulsFormats.ESD
 {
     /// <summary>
     /// A state machine used for gameplay, menus, and dialog throughout the series.
@@ -428,19 +429,19 @@ namespace SoulsFormats
             public List<Condition> Conditions;
 
             /// <summary>
-            /// Commands to be executed when the state is entered.
+            /// Script to be executed when the state is entered.
             /// </summary>
-            public List<CommandCall> EntryCommands;
+            public string EntryScript;
 
             /// <summary>
-            /// Commands to be executed when the state is exited.
+            /// Script to be executed when the state is exited.
             /// </summary>
-            public List<CommandCall> ExitCommands;
+            public string ExitScript;
 
             /// <summary>
-            /// Unknown. Speculation: commands to be executed constantly while in the state.
+            /// Script to be executed constantly at 30 Hz while in the state.
             /// </summary>
-            public List<CommandCall> WhileCommands;
+            public string WhileScript;
 
             internal long ID;
             private long[] conditionOffsets;
@@ -451,9 +452,9 @@ namespace SoulsFormats
             public State()
             {
                 Conditions = new List<Condition>();
-                EntryCommands = new List<CommandCall>();
-                ExitCommands = new List<CommandCall>();
-                WhileCommands = new List<CommandCall>();
+                EntryScript = "";
+                ExitScript = "";
+                WhileScript = "";
             }
 
             internal State(BinaryReaderEx br, bool longFormat, long dataStart)
@@ -474,19 +475,25 @@ namespace SoulsFormats
                     conditionOffsets = ReadVarints(br, longFormat, conditionOffsetCount);
 
                     br.Position = dataStart + entryCommandsOffset;
-                    EntryCommands = new List<CommandCall>((int)entryCommandCount);
+                    var EntryCommands = new List<CommandCall>((int)entryCommandCount);
                     for (int i = 0; i < entryCommandCount; i++)
                         EntryCommands.Add(new CommandCall(br, longFormat, dataStart));
 
+                    EntryScript = EzSembler.DissembleCommandScript(EntryCommands);
+
                     br.Position = dataStart + exitCommandsOffset;
-                    ExitCommands = new List<CommandCall>((int)exitCommandCount);
+                    var ExitCommands = new List<CommandCall>((int)exitCommandCount);
                     for (int i = 0; i < exitCommandCount; i++)
                         ExitCommands.Add(new CommandCall(br, longFormat, dataStart));
 
+                    ExitScript = EzSembler.DissembleCommandScript(ExitCommands);
+
                     br.Position = dataStart + whileCommandsOffset;
-                    WhileCommands = new List<CommandCall>((int)whileCommandCount);
+                    var WhileCommands = new List<CommandCall>((int)whileCommandCount);
                     for (int i = 0; i < whileCommandCount; i++)
                         WhileCommands.Add(new CommandCall(br, longFormat, dataStart));
+
+                    WhileScript = EzSembler.DissembleCommandScript(WhileCommands);
                 }
                 br.StepOut();
             }
@@ -501,6 +508,10 @@ namespace SoulsFormats
 
             internal void WriteHeader(BinaryWriterEx bw, bool longFormat, long groupID, long stateID)
             {
+                var EntryCommands = EzSembler.AssembleCommandScript(EntryScript);
+                var ExitCommands = EzSembler.AssembleCommandScript(ExitScript);
+                var WhileCommands = EzSembler.AssembleCommandScript(WhileScript);
+
                 WriteVarint(bw, longFormat, stateID);
                 ReserveVarint(bw, longFormat, $"State{groupID}-{stateID}:ConditionsOffset");
                 WriteVarint(bw, longFormat, Conditions.Count);
@@ -514,6 +525,10 @@ namespace SoulsFormats
 
             internal void WriteCommandCalls(BinaryWriterEx bw, bool longFormat, long groupID, long stateID, long dataStart, List<CommandCall> commands)
             {
+                var EntryCommands = EzSembler.AssembleCommandScript(EntryScript);
+                var ExitCommands = EzSembler.AssembleCommandScript(ExitScript);
+                var WhileCommands = EzSembler.AssembleCommandScript(WhileScript);
+
                 if (EntryCommands.Count == 0)
                 {
                     FillVarint(bw, longFormat, $"State{groupID}-{stateID}:EntryCommandsOffset", -1);
@@ -579,7 +594,9 @@ namespace SoulsFormats
             /// <summary>
             /// Commands to be executed if the condition passes.
             /// </summary>
-            public List<CommandCall> PassCommands;
+            //internal List<CommandCall> PassCommands;
+
+            public string PassScript;
 
             /// <summary>
             /// If present and this condition passes, evaluation will continue to these conditions.
@@ -589,7 +606,7 @@ namespace SoulsFormats
             /// <summary>
             /// Bytecode which determines whether the condition passes.
             /// </summary>
-            public byte[] Evaluator;
+            public string Evaluator;
 
             private long stateOffset;
             private long[] conditionOffsets;
@@ -600,18 +617,18 @@ namespace SoulsFormats
             public Condition()
             {
                 TargetState = null;
-                PassCommands = new List<CommandCall>();
+                PassScript = "";
                 Subconditions = new List<Condition>();
-                Evaluator = new byte[0];
+                Evaluator = "1;";
             }
 
             /// <summary>
             /// Creates a new Condition with the given target state and evaluator, and no commands or subconditions.
             /// </summary>
-            public Condition(long targetState, byte[] evaluator)
+            public Condition(long targetState, string evaluator)
             {
                 TargetState = targetState;
-                PassCommands = new List<CommandCall>();
+                PassScript = "";
                 Subconditions = new List<Condition>();
                 Evaluator = evaluator;
             }
@@ -629,14 +646,16 @@ namespace SoulsFormats
                 br.StepIn(0);
                 {
                     br.Position = dataStart + passCommandsOffset;
-                    PassCommands = new List<CommandCall>((int)passCommandCount);
+                    var PassCommands = new List<CommandCall>((int)passCommandCount);
                     for (int i = 0; i < passCommandCount; i++)
                         PassCommands.Add(new CommandCall(br, longFormat, dataStart));
+
+                    PassScript = EzSembler.DissembleCommandScript(PassCommands);
 
                     br.Position = dataStart + conditionOffsetsOffset;
                     conditionOffsets = ReadVarints(br, longFormat, conditionOffsetCount);
 
-                    Evaluator = br.GetBytes(dataStart + evaluatorOffset, (int)evaluatorLength);
+                    Evaluator = EzSembler.Dissemble(br.GetBytes(dataStart + evaluatorOffset, (int)evaluatorLength));
                 }
                 br.StepOut();
             }
@@ -677,16 +696,19 @@ namespace SoulsFormats
                 else
                     WriteVarint(bw, longFormat, -1);
 
+                var PassCommands = EzSembler.AssembleCommandScript(PassScript);
+
                 ReserveVarint(bw, longFormat, $"Condition{groupID}-{index}:PassCommandsOffset");
                 WriteVarint(bw, longFormat, PassCommands.Count);
                 ReserveVarint(bw, longFormat, $"Condition{groupID}-{index}:ConditionsOffset");
                 WriteVarint(bw, longFormat, Subconditions.Count);
                 ReserveVarint(bw, longFormat, $"Condition{groupID}-{index}:EvaluatorOffset");
-                WriteVarint(bw, longFormat, Evaluator.Length);
+                WriteVarint(bw, longFormat, EzSembler.Assemble(Evaluator).Length);
             }
 
             internal void WriteCommandCalls(BinaryWriterEx bw, bool longFormat, long groupID, int index, long dataStart, List<CommandCall> commands)
             {
+                var PassCommands = EzSembler.AssembleCommandScript(PassScript);
                 if (PassCommands.Count == 0)
                 {
                     FillVarint(bw, longFormat, $"Condition{groupID}-{index}:PassCommandsOffset", -1);
@@ -720,7 +742,7 @@ namespace SoulsFormats
             internal void WriteEvaluator(BinaryWriterEx bw, bool longFormat, long groupID, int index, long dataStart)
             {
                 FillVarint(bw, longFormat, $"Condition{groupID}-{index}:EvaluatorOffset", bw.Position - dataStart);
-                bw.WriteBytes(Evaluator);
+                bw.WriteBytes(EzSembler.Assemble(Evaluator));
             }
         }
 
@@ -742,7 +764,7 @@ namespace SoulsFormats
             /// <summary>
             /// Bytecode expressions to evaluate and pass as arguments to the command.
             /// </summary>
-            public List<byte[]> Arguments;
+            public List<string> Arguments;
 
             /// <summary>
             /// Creates a new CommandCall with bank 1, ID 0, and no arguments.
@@ -751,13 +773,13 @@ namespace SoulsFormats
             {
                 CommandBank = 1;
                 CommandID = 0;
-                Arguments = new List<byte[]>();
+                Arguments = new List<string>();
             }
 
             /// <summary>
             /// Creates a new CommandCall with the given bank, ID, and arguments.
             /// </summary>
-            public CommandCall(int commandBank, int commandID, params byte[][] arguments)
+            public CommandCall(int commandBank, int commandID, params string[] arguments)
             {
                 CommandBank = commandBank;
                 CommandID = commandID;
@@ -773,12 +795,12 @@ namespace SoulsFormats
 
                 br.StepIn(dataStart + argsOffset);
                 {
-                    Arguments = new List<byte[]>((int)argsCount);
+                    Arguments = new List<string>((int)argsCount);
                     for (int i = 0; i < argsCount; i++)
                     {
                         long argOffset = ReadVarint(br, longFormat);
                         long argSize = ReadVarint(br, longFormat);
-                        Arguments.Add(br.GetBytes(dataStart + argOffset, (int)argSize));
+                        Arguments.Add(EzSembler.Dissemble(br.GetBytes(dataStart + argOffset, (int)argSize)));
                     }
                 }
                 br.StepOut();
@@ -798,7 +820,7 @@ namespace SoulsFormats
                 for (int i = 0; i < Arguments.Count; i++)
                 {
                     ReserveVarint(bw, longFormat, $"Command{index}-{i}:BytecodeOffset");
-                    WriteVarint(bw, longFormat, Arguments[i].Length);
+                    WriteVarint(bw, longFormat, EzSembler.Assemble(Arguments[i]).Length);
                 }
             }
 
@@ -807,7 +829,7 @@ namespace SoulsFormats
                 for (int i = 0; i < Arguments.Count; i++)
                 {
                     FillVarint(bw, longFormat, $"Command{index}-{i}:BytecodeOffset", bw.Position - dataStart);
-                    bw.WriteBytes(Arguments[i]);
+                    bw.WriteBytes(EzSembler.Assemble(Arguments[i]));
                 }
             }
         }

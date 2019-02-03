@@ -77,7 +77,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Formats\DRB.cs" />
-    <Compile Include="Formats\ESD.cs" />
+    <Compile Include="Formats\ESD\ESD.cs" />
+    <Compile Include="Formats\ESD\EzSemble\Assemble.cs" />
+    <Compile Include="Formats\ESD\EzSemble\Disassemble.cs" />
     <Compile Include="Formats\NVM.cs" />
     <Compile Include="Formats\Other\ACE3\BND0.cs" />
     <Compile Include="Formats\Other\EnchantedArms\COMPBND.cs" />
@@ -132,6 +134,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Formats\TAE3\TAE3.Event.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Formats\ESD\EzSemble\Common.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
