@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Text;
+using Crypto = System.Security.Cryptography;
 
 namespace SoulsFormats
 {
@@ -15,6 +17,7 @@ namespace SoulsFormats
         private static readonly Encoding ShiftJIS = Encoding.GetEncoding("shift-jis");
         private static readonly Encoding UTF16 = Encoding.Unicode;
         private static readonly Encoding UTF16BE = Encoding.BigEndianUnicode;
+        private static readonly Crypto.MD5 MD5 = Crypto.MD5.Create();
 
         private BinaryReader br;
         private Stack<long> steps;
@@ -28,6 +31,17 @@ namespace SoulsFormats
         /// The underlying stream.
         /// </summary>
         public Stream Stream { get; private set; }
+
+        /// <summary>
+        /// Gets the MD5 hash of the current stream's bytes from beginning to end.
+        /// </summary>
+        public string GetMD5HashOfStream()
+        {
+            StepIn(0);
+            var hash = MD5.ComputeHash(Stream);
+            StepOut();
+            return string.Join("", hash.Select(x => x.ToString("X2")));
+        }
 
         /// <summary>
         /// The current position of the stream.
