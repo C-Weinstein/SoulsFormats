@@ -137,7 +137,6 @@ namespace SoulsFormats
             {
                 BinaryWriterEx bw = new BinaryWriterEx(false, corruptPreventStream);
                 Write(bw, compression);
-                bw.Finish();
 
                 corruptPreventStream.Position = 0;
 
@@ -145,6 +144,8 @@ namespace SoulsFormats
                 {
                     corruptPreventStream.CopyTo(actualFileStream);
                 }
+
+                bw.Finish();
             }
         }
     }
