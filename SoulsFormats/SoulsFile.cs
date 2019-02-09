@@ -133,11 +133,18 @@ namespace SoulsFormats
         /// </summary>
         public void Write(string path, DCX.Type compression)
         {
-            using (FileStream stream = File.Create(path))
+            using (MemoryStream corruptPreventStream = new MemoryStream())
             {
-                BinaryWriterEx bw = new BinaryWriterEx(false, stream);
+                BinaryWriterEx bw = new BinaryWriterEx(false, corruptPreventStream);
                 Write(bw, compression);
                 bw.Finish();
+
+                corruptPreventStream.Position = 0;
+
+                using (FileStream actualFileStream = File.Create(path))
+                {
+                    corruptPreventStream.CopyTo(actualFileStream);
+                }
             }
         }
     }
