@@ -231,7 +231,7 @@ namespace SoulsFormats.Formats
         {
             public EMEVD File { get; }
             public int ID { get; set; }
-            public BonfireHanlder BonfireHandler { get; set; }
+            public BonfireHandler BonfireHandler { get; set; }
 
             public List<Instruction> Instructions = new List<Instruction>();
             public List<Parameter> Parameters = new List<Parameter>();
@@ -243,7 +243,7 @@ namespace SoulsFormats.Formats
             {
                 ID = id;
                 File = emevd;
-                BonfireHandler = BonfireHanlder.Normal;
+                BonfireHandler = BonfireHandler.Normal;
             }
 
             public Event(BinaryReaderEx br, EMEVD emevd)
@@ -274,7 +274,7 @@ namespace SoulsFormats.Formats
                 }
 
 
-                BonfireHandler = (BonfireHanlder)br.AssertInt32(0x00000000, 0x00000001, 0x00000002);
+                BonfireHandler = (BonfireHandler)br.AssertInt32(0x00000000, 0x00000001, 0x00000002);
 
                 br.AssertInt32(0);
             }
