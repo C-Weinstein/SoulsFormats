@@ -5,7 +5,7 @@ namespace SoulsFormats.Formats
 {
     public enum Game { DS1 = 0, BB = 1, DS3 = 2 }
 
-    public enum BonfireHanlder { Normal = 0x00000000, Restart = 0x00000001, End = 0x00000002 }
+    public enum BonfireHandler { Normal = 0x00000000, Restart = 0x00000001, End = 0x00000002 }
 
     public class EMEVD : SoulsFile<EMEVD>
     {
