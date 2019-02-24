@@ -24,7 +24,7 @@
     <Prefer32Bit>false</Prefer32Bit>
     <DocumentationFile>bin\Debug\SoulsFormats.xml</DocumentationFile>
     <LangVersion>7.3</LangVersion>
-    <NoWarn>IDE0017</NoWarn>
+    <NoWarn>IDE0017,1591</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
