@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace SoulsFormats.Formats
 {
-    public enum Game { DS1 = 0, BB = 1, DS3 = 2 }
+    public enum Game : uint { DS1, BB, DS3 }
 
-    public enum BonfireHandler { Normal = 0x00000000, Restart = 0x00000001, End = 0x00000002 }
+    public enum BonfireHandler : uint { Normal = 0, Restart = 1, End = 2 };
 
     public class EMEVD : SoulsFile<EMEVD>
     {
@@ -91,31 +91,31 @@ namespace SoulsFormats.Formats
              */
 
             Console.WriteLine("Reading instructions...");
-            br.Position = (int) insOffset;
+            br.Position = insOffset;
             for (long i = 0; i < insCount; i++) ReadInstructions.Add(new Instruction(br, this));
 
             Console.WriteLine("Reading layers...");
-            br.Position = (int) layOffset;
+            br.Position = layOffset;
             for (long i = 0; i < layCount; i++) ReadLayers.Add(new Layer(br, Game));
 
             Console.WriteLine("Reading argument data...");
-            br.Position = (int) argOffset;
+            br.Position = argOffset;
             ReadArgData = new List<byte>(br.ReadBytes((int) argLength));
 
             Console.WriteLine("Reading parameters...");
-            br.Position = (int) prmOffset;
+            br.Position = prmOffset;
             for (long i = 0; i < prmCount; i++) ReadParameters.Add(new Parameter(br, Game));
 
             Console.WriteLine("Reading linked files...");
-            br.Position = (int) lnkOffset;
+            br.Position = lnkOffset;
             for (long i = 0; i < lnkCount; i++) ReadLinkedFiles.Add(new LinkedFile(br, Game));
 
             Console.WriteLine("Reading string data...");
-            br.Position = (int) strOffset;
+            br.Position = strOffset;
             ReadStringData = new List<byte>(br.ReadBytes((int) strLength));
 
             Console.WriteLine("Reading events...");
-            br.Position = (int) evtOffset;
+            br.Position = evtOffset;
             for (long i = 0; i < evtCount; i++) Events.Add(new Event(br, this));
         }
 
@@ -219,7 +219,6 @@ namespace SoulsFormats.Formats
             fillUintW("fileSize", bw.Position);
         }
 
-
         #region Nested Classes
 
         public class Event
@@ -245,8 +244,8 @@ namespace SoulsFormats.Formats
             {
 
                 File = emevd;
-                long uintW() => File.IsDS1 ? (long) br.ReadUInt64() : br.ReadUInt32();
-                long sintW() => File.IsDS1 ? br.ReadInt64() : br.ReadInt32();
+                long uintW() => !File.IsDS1 ? (long) br.ReadUInt64() : br.ReadUInt32();
+                long sintW() => !File.IsDS1 ? br.ReadInt64() : br.ReadInt32();
 
                 ID = uintW();
 
@@ -268,7 +267,7 @@ namespace SoulsFormats.Formats
                     Parameters.Add(File.ReadParameters[(int) i]);
                 }
 
-                BonfireHandler = (BonfireHandler)br.AssertInt32(0x00000000, 0x00000001, 0x00000002);
+                BonfireHandler = br.ReadEnum32<BonfireHandler>();
                 br.AssertUInt32(0);
             }
 
@@ -282,7 +281,7 @@ namespace SoulsFormats.Formats
 
                 uintW(ID);
                 uintW(Instructions.Count);
-                uintW(File.ReadInstructions.Count * File.InstructionSize);
+                uintW(File.WriteInstructions.Count * File.InstructionSize);
 
                 if (Parameters.Count == 0)
                 {
@@ -293,15 +292,17 @@ namespace SoulsFormats.Formats
                         bw.WriteInt32(0);
                     }
                     else bw.WriteInt64(-1);
-
-                }
+                }   
                 else uintW(Parameters.Count);
-                uintW(File.ReadParameters.Count * File.ParameterSize);
-                bw.WriteUInt32((uint)BonfireHandler);
+
+                uintW(File.WriteParameters.Count * File.ParameterSize);
+                bw.WriteUInt32((uint) BonfireHandler);
                 bw.WriteInt32(0);
 
-                foreach (var i in Instructions) File.WriteInstructions.Add(i);
-                foreach (var p in Parameters) File.WriteParameters.Add(p);
+                foreach (var i in Instructions)
+                    File.WriteInstructions.Add(i);
+                foreach (var p in Parameters)
+                    File.WriteParameters.Add(p);
             }
         }
 
@@ -321,9 +322,9 @@ namespace SoulsFormats.Formats
 
             public uint InstructionClass;
             public uint InstructionIndex;
-            public int ArgLength;
-            public int ArgOffset;
-            public int EventLayerOffset;
+            public long ArgLength;
+            public long ArgOffset;
+            public long EventLayerOffset;
 
             public Instruction(uint insClass, uint insIndex)
             {
@@ -379,16 +380,16 @@ namespace SoulsFormats.Formats
         {
             public Game Game;
 
-            public int InstructionNumber;
-            public int DestinationStartByte;
-            public int SourceStartByte;
-            public int Length;
+            public long InstructionNumber;
+            public long DestinationStartByte;
+            public long SourceStartByte;
+            public long Length;
 
             public Parameter (BinaryReaderEx br, Game g)
             {
                 Game = g;
 
-                int uintW() => Game != Game.DS1 ? (int)br.ReadUInt64() : (int)br.ReadUInt32();
+                long uintW() => Game != Game.DS1 ? (long) br.ReadUInt64() : (long) br.ReadUInt32();
 
                 InstructionNumber = uintW();
                 DestinationStartByte = uintW();
