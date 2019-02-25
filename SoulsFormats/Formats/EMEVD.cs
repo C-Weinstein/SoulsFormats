@@ -308,8 +308,10 @@ namespace SoulsFormats.Formats
             public Layer EventLayer = null;
             public dynamic[] Arguments;
 
-            public Instruction(uint insClass, uint insIndex, params dynamic[] args)
+            public Instruction(EMEVD emevd, uint insClass, uint insIndex, params dynamic[] args)
             {
+                File = emevd;
+
                 InstructionClass = insClass;
                 InstructionIndex = insIndex;
                 ArgDocs = File.Documentation[InstructionClass][InstructionIndex].Arguments;
