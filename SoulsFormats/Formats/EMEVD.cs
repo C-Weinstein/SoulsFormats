@@ -37,7 +37,6 @@ namespace SoulsFormats.Formats
         internal long ParameterSize => IsDS1 ? 20 : 32;
         internal long LinkedFileSize => IsDS1 ? 4 : 8;
 
-
         public Event GetEvent(long i) => Events.Find(evt => evt.ID == i);
 
         internal override bool Is(BinaryReaderEx br) => br.GetASCII(0, 4) == "EVD\0";
@@ -55,7 +54,7 @@ namespace SoulsFormats.Formats
             else if (v1 == 0x0001FF00 && v2 == 0x000000CD) Game = Game.DS3;
             else throw new Exception("Could not detect game type from header.");
 
-            /* rRead different values depending on if the game targets 32-bit or 64-bit
+            /* Read different values depending on if the game targets 32-bit or 64-bit
              * and return them as int. Convert them back to proper types on write.
              */
 
@@ -84,39 +83,38 @@ namespace SoulsFormats.Formats
             long strOffset = uintW();
 
             if (Game == Game.DS1) zeroW();
+
             #endregion
 
             /* We jump around the file bceause reading the instructions and parameters
              * first makes it easier to process events.
              */
 
-            Console.WriteLine("Reading instructions...");
             br.Position = insOffset;
-            for (long i = 0; i < insCount; i++) ReadInstructions.Add(new Instruction(br, this));
+            for (long i = 0; i < insCount; i++)
+                ReadInstructions.Add(new Instruction(br, this));
 
-            Console.WriteLine("Reading layers...");
             br.Position = layOffset;
-            for (long i = 0; i < layCount; i++) ReadLayers.Add(new Layer(br, Game));
+            for (long i = 0; i < layCount; i++)
+                ReadLayers.Add(new Layer(br, Game));
 
-            Console.WriteLine("Reading argument data...");
             br.Position = argOffset;
             ReadArgData = new List<byte>(br.ReadBytes((int) argLength));
 
-            Console.WriteLine("Reading parameters...");
             br.Position = prmOffset;
-            for (long i = 0; i < prmCount; i++) ReadParameters.Add(new Parameter(br, Game));
+            for (long i = 0; i < prmCount; i++)
+                ReadParameters.Add(new Parameter(br, Game));
 
-            Console.WriteLine("Reading linked files...");
             br.Position = lnkOffset;
-            for (long i = 0; i < lnkCount; i++) ReadLinkedFiles.Add(new LinkedFile(br, Game));
+            for (long i = 0; i < lnkCount; i++)
+                ReadLinkedFiles.Add(new LinkedFile(br, Game));
 
-            Console.WriteLine("Reading string data...");
             br.Position = strOffset;
             ReadStringData = new List<byte>(br.ReadBytes((int) strLength));
 
-            Console.WriteLine("Reading events...");
             br.Position = evtOffset;
-            for (long i = 0; i < evtCount; i++) Events.Add(new Event(br, this));
+            for (long i = 0; i < evtCount; i++)
+                Events.Add(new Event(br, this));
         }
 
         internal override void Write(BinaryWriterEx bw)
@@ -143,10 +141,10 @@ namespace SoulsFormats.Formats
                 bw.WriteUInt32(0x000000CD);
             }
 
-            void uintW(ulong i)
+            void uintW(long i)
             {
                 if (IsDS1) bw.WriteUInt32((uint) i);
-                else bw.WriteUInt64(i);
+                else bw.WriteUInt64((ulong) i);
             }
 
             void resUintW(string name)
@@ -155,68 +153,61 @@ namespace SoulsFormats.Formats
                 else bw.ReserveUInt64(name);
             }
 
-            void fillUintW(string name, long value)
+            void fillUintW(string name)
             {
-                if (IsDS1) bw.FillUInt32(name, (uint) value);
-                else bw.FillUInt64(name, (ulong) value);
+                if (IsDS1) bw.FillUInt32(name, (uint) bw.Position);
+                else bw.FillUInt64(name, (ulong) bw.Position);
             }
 
             //write header
             resUintW("fileSize");
-            resUintW("eventCount");
+            uintW(Events.Count);
             resUintW("eventTableOffset");
-            resUintW("instructionCount");
+            uintW(WriteInstructions.Count);
             resUintW("instructionTableOffset");
             uintW(0);
             resUintW("eventLayerTableOffset");
-            resUintW("layerCount");
+            uintW(WriteLayers.Count);
             resUintW("eventLayerTableOffset");
-            resUintW("paramCount");
+            uintW(WriteParameters.Count);
             resUintW("paramTableOffset");
-            resUintW("linkedFileCount");
+            uintW(WriteLinkedFiles.Count);
             resUintW("linkedFileTableOffset");
-            resUintW("argDataLength");
+            uintW(WriteArgData.Count + (IsDS1 ? 4 : 0));
             resUintW("argDataOffset");
-            resUintW("stringDataLength");
+            uintW(WriteStringData.Count);
             resUintW("stringDataOffset");
 
             //write events
-            fillUintW("eventTableOffset", bw.Position);
+            fillUintW("eventTableOffset");
             foreach (var evt in Events) evt.Write(bw);
-            fillUintW("eventCount", Events.Count);
 
             //write instructions
-            fillUintW("instructionTableOffset", bw.Position);
+            fillUintW("instructionTableOffset");
             foreach (var ins in WriteInstructions) ins.Write(bw);
-            fillUintW("instructionCount", WriteInstructions.Count);
 
             //write layers
-            fillUintW("instructionTableOffset", bw.Position);
+            fillUintW("instructionTableOffset");
             foreach (var lay in WriteLayers) lay.Write(bw);
-            fillUintW("layerCount", WriteLayers.Count);
 
             //write argument data
-            fillUintW("argDataOffset", bw.Position);
+            fillUintW("argDataOffset");
             bw.WriteBytes(WriteArgData.ToArray());
-            fillUintW("argDataLength", WriteArgData.Count + (IsDS1 ? 4 : 0));
 
             //write parameters
-            fillUintW("paramTableOffset", bw.Position);
+            fillUintW("paramTableOffset");
             foreach (var par in WriteParameters) par.Write(bw);
-            fillUintW("paramCount", WriteParameters.Count);
 
             //write linked files
-            fillUintW("linkedFileTableOffset", bw.Position);
+            fillUintW("linkedFileTableOffset");
             foreach (var lnk in WriteLinkedFiles) lnk.Write(bw);
-            bw.WriteBytes(WriteStringData.ToArray());
 
             //write string data
-            fillUintW("stringDataOffset", bw.Position);
+            fillUintW("stringDataOffset");
             bw.WriteBytes(WriteStringData.ToArray());
-            fillUintW("stringDataLength", WriteStringData.Count);
 
             //write file size
-            fillUintW("fileSize", bw.Position);
+            fillUintW("fileSize");
         }
 
         #region Nested Classes
@@ -252,20 +243,16 @@ namespace SoulsFormats.Formats
                 long instructionCount = uintW();
                 long instructionOffset = uintW();
                 long insStart = instructionOffset / File.InstructionSize;
-                for (long i = insStart; i < instructionCount; i++)
-                {
+                for (long i = insStart; i < insStart + instructionCount; i++)
                     Instructions.Add(File.ReadInstructions[(int) i]);
-                }
 
                 long paramCount = uintW();
                 long paramOffset = File.Game == Game.BB ? br.ReadUInt32() : sintW();
                 if (File.Game == Game.BB) br.AssertUInt32(0);
 
                 long parStart = paramOffset / (File.IsDS1 ? 20 : 32);
-                for (long i = parStart; i < paramCount; i++)
-                {
+                for (long i = parStart; i < parStart + paramCount; i++)
                     Parameters.Add(File.ReadParameters[(int) i]);
-                }
 
                 BonfireHandler = br.ReadEnum32<BonfireHandler>();
                 br.AssertUInt32(0);
@@ -389,7 +376,7 @@ namespace SoulsFormats.Formats
             {
                 Game = g;
 
-                long uintW() => Game != Game.DS1 ? (long) br.ReadUInt64() : (long) br.ReadUInt32();
+                long uintW() => Game != Game.DS1 ? (long) br.ReadUInt64() : br.ReadUInt32();
 
                 InstructionNumber = uintW();
                 DestinationStartByte = uintW();
@@ -409,12 +396,12 @@ namespace SoulsFormats.Formats
         {
             public Game Game;
 
-            int FileNameOffset;
+            long FileNameOffset;
 
             public LinkedFile (BinaryReaderEx br, Game g)
             {
                 Game = g;
-                FileNameOffset = Game != Game.DS1 ? (int)br.ReadUInt64() : (int)br.ReadUInt32();
+                FileNameOffset = (long)(Game != Game.DS1 ? br.ReadUInt64() : br.ReadUInt32());
             }
 
             public void Write(BinaryWriterEx bw)
