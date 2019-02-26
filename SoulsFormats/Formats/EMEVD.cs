@@ -10,11 +10,8 @@ namespace SoulsFormats.Formats
 
     public enum BonfireHandler : uint { Normal = 0, Restart = 1, End = 2 };
 
-
-
     public class EMEVD : SoulsFile<EMEVD>
     {
-
 
         public Game Game { get; set; }
         public List<Event> Events = new List<Event>();
@@ -23,12 +20,13 @@ namespace SoulsFormats.Formats
         private EMEDF Documentation;
 
         //for managing data when exporting
+
         internal List<Instruction> WriteInstructions = new List<Instruction>();
-        internal List<LinkedFile> WriteLinkedFiles = new List<LinkedFile>();
-        internal List<byte> WriteStringData = new List<byte>();
-        internal List<byte> WriteArgData = new List<byte>();
         internal List<Layer> WriteLayers = new List<Layer>();
+        internal int ArgDataLength = 0;
         internal List<Parameter> WriteParameters = new List<Parameter>();
+        internal List<LinkedFile> WriteLinkedFiles = new List<LinkedFile>();
+        internal int StringDataLength = 0;
 
         internal long HeaderSize => IsDS1 ? 84 : 148;
         internal long EventSize => IsDS1 ? 28 : 48;
@@ -77,6 +75,7 @@ namespace SoulsFormats.Formats
             /* Read different values depending on if the game targets 32-bit or 64-bit
              * and return them as int. Convert them back to proper types on write.
              */
+
             if (Game == Game.DS1) Documentation = EMEDF.Read("ds1-common.emedf.json");
             else if (Game == Game.BB) Documentation = EMEDF.Read("bb-common.emedf.json");
             else if (Game == Game.DS3) Documentation = EMEDF.Read("ds3-common.emedf.json");
@@ -111,9 +110,8 @@ namespace SoulsFormats.Formats
 
             #endregion
 
-            /* We jump around the file bceause reading the instructions and parameters
-             * first makes it easier to process events.
-             */
+            //read events, everything else added along the way
+
             br.Position = info.EventOffset;
             for (long i = 0; i < info.EventCount; i++)
                 Events.Add(new Event(br, info));
@@ -121,12 +119,12 @@ namespace SoulsFormats.Formats
 
         internal override void Write(BinaryWriterEx bw)
         {
-            WriteArgData.Clear();
+            ArgDataLength = 0;
             WriteInstructions.Clear();
             WriteLayers.Clear();
             WriteLinkedFiles.Clear();
             WriteParameters.Clear();
-            WriteStringData.Clear();
+            StringDataLength = 0;
 
             bw.WriteASCII("EVD\0");
             if (Game == Game.DS1)
@@ -155,8 +153,9 @@ namespace SoulsFormats.Formats
                 else bw.ReserveUInt64(name);
             }
 
-            void fillUintW(string name)
+            void fillUintW(string name, long? u = null)
             {
+                if (!u.HasValue) u = bw.Position;
                 if (IsDS1) bw.FillUInt32(name, (uint) bw.Position);
                 else bw.FillUInt64(name, (ulong) bw.Position);
             }
@@ -165,19 +164,19 @@ namespace SoulsFormats.Formats
             resUintW("fileSize");
             uintW(Events.Count);
             resUintW("eventTableOffset");
-            uintW(WriteInstructions.Count);
+            resUintW("instructionCount");
             resUintW("instructionTableOffset");
             uintW(0);
             resUintW("eventLayerTableOffset");
-            uintW(WriteLayers.Count);
+            resUintW("layerCount");
             resUintW("eventLayerTableOffset");
-            uintW(WriteParameters.Count);
+            resUintW("paramCount");
             resUintW("paramTableOffset");
-            uintW(WriteLinkedFiles.Count);
+            resUintW("linkedFileCount");
             resUintW("linkedFileTableOffset");
-            uintW(WriteArgData.Count + (IsDS1 ? 4 : 0));
+            resUintW("argDataLength"); //
             resUintW("argDataOffset");
-            uintW(WriteStringData.Count);
+            resUintW("stringDataLength");
             resUintW("stringDataOffset");
 
             //write events
@@ -185,28 +184,35 @@ namespace SoulsFormats.Formats
             foreach (var evt in Events) evt.Write(bw);
 
             //write instructions
+            fillUintW("instructionCount", WriteInstructions.Count);
             fillUintW("instructionTableOffset");
-            foreach (var ins in WriteInstructions) ins.Write(bw);
+            foreach (var ins in WriteInstructions) ins.WriteIns(bw);
 
             //write layers
+            fillUintW("layerCount", WriteLayers.Count);
             fillUintW("instructionTableOffset");
             foreach (var lay in WriteLayers) lay.Write(bw);
 
             //write argument data
+            fillUintW("argDataLength", ArgDataLength + (IsDS1 ? 4 : 0));
             fillUintW("argDataOffset");
-            bw.WriteBytes(WriteArgData.ToArray());
+            foreach (var ins in WriteInstructions) ins.WriteArgs(bw);
+            if (IsDS1) bw.WriteInt32(0);
 
             //write parameters
+            fillUintW("paramCount", WriteParameters.Count);
             fillUintW("paramTableOffset");
             foreach (var par in WriteParameters) par.Write(bw);
 
             //write linked files
+            fillUintW("linkedFileCount", WriteLinkedFiles.Count);
             fillUintW("linkedFileTableOffset");
             foreach (var lnk in WriteLinkedFiles) lnk.Write(bw);
 
             //write string data
+            fillUintW("stringDataLength", StringDataLength);
             fillUintW("stringDataOffset");
-            bw.WriteBytes(WriteStringData.ToArray());
+            //bw.WriteBytes(WriteStringData.ToArray());
 
             //write file size
             fillUintW("fileSize");
@@ -390,11 +396,43 @@ namespace SoulsFormats.Formats
                 return args.ToArray();
             }
 
-            public void Write(BinaryWriterEx bw)
+            public void WriteIns(BinaryWriterEx bw)
             {
                 bw.WriteUInt32(InstructionClass);
                 bw.WriteUInt32(InstructionIndex);
 
+                int argLength = 0;
+                foreach (var doc in ArgDocs)
+                {
+                    if (doc.Type == 0 || doc.Type == 3) argLength++;
+                    else if (doc.Type == 1 || doc.Type == 4)
+                    {
+                        while (argLength % 2 != 0) argLength++;
+                        argLength += 2;
+                    }
+                    else
+                    {
+                        while (argLength % 4 != 0) argLength++;
+                        argLength += 4;
+                    }
+                }
+                bw.WriteInt32(argLength);
+                if (!File.IsDS1) bw.WriteInt32(0);
+
+
+                if (File.Game == Game.DS3)
+                {
+                    bw.WriteInt64(File.ArgDataLength);
+                } else
+                {
+                    bw.WriteInt32(File.ArgDataLength);
+                    bw.WriteInt32(0);
+                }
+                File.ArgDataLength += argLength;
+            }
+
+            public void WriteArgs(BinaryWriterEx bw)
+            {
                 for (int i = 0; i < ArgDocs.Length; i++)
                 {
                     var doc = ArgDocs[i];
@@ -403,15 +441,18 @@ namespace SoulsFormats.Formats
                     if (doc.Type == 0)
                     {
                         bw.WriteByte(arg);
-                    } else if (doc.Type == 1)
+                    }
+                    else if (doc.Type == 1)
                     {
                         bw.Pad(2);
                         bw.WriteUInt16(arg);
-                    } else if (doc.Type == 2)
+                    }
+                    else if (doc.Type == 2)
                     {
                         bw.Pad(4);
                         bw.WriteUInt32(arg);
-                    } else if (doc.Type == 3)
+                    }
+                    else if (doc.Type == 3)
                     {
                         bw.WriteByte(arg);
                     }
@@ -438,6 +479,7 @@ namespace SoulsFormats.Formats
                 }
             }
         }
+
         /* EVERYTHING BELOW HERE IS UNFINISHED */
         /* EVERYTHING BELOW HERE IS UNFINISHED */
         /* EVERYTHING BELOW HERE IS UNFINISHED */
@@ -535,7 +577,7 @@ namespace SoulsFormats.Formats
                 File = info.File;
                 long FileNameOffset = (long)(!File.IsDS1 ? br.ReadUInt64() : br.ReadUInt32());
                 br.StepIn(info.StringDataOffset + FileNameOffset);
-                br.ReadShiftJIS();
+                FileName = br.ReadShiftJIS();
                 br.StepOut();
             }
 
