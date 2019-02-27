@@ -16,6 +16,8 @@ namespace SoulsFormats.Formats
         public List<Event> Events = new List<Event>();
 
         private bool IsDS1 => Game == Game.DS1;
+        private bool IsBB => Game == Game.BB;
+        private bool IsDS3 => Game == Game.DS3;
         private EMEDF Documentation;
 
         //for managing data when exporting
@@ -75,9 +77,9 @@ namespace SoulsFormats.Formats
              * and return them as int. Convert them back to proper types on write.
              */
 
-            if (Game == Game.DS1) Documentation = EMEDF.Read("ds1-common.emedf.json");
-            else if (Game == Game.BB) Documentation = EMEDF.Read("bb-common.emedf.json");
-            else if (Game == Game.DS3) Documentation = EMEDF.Read("ds3-common.emedf.json");
+            if (IsDS1) Documentation = EMEDF.Read("ds1-common.emedf.json");
+            else if (IsBB) Documentation = EMEDF.Read("bb-common.emedf.json");
+            else if (IsDS3) Documentation = EMEDF.Read("ds3-common.emedf.json");
             
             long uintW() => !IsDS1 ? (long) br.ReadUInt64() : br.ReadUInt32();
             long zeroW() => !IsDS1 ? br.AssertInt64(0) : br.AssertInt32(0);
@@ -105,7 +107,7 @@ namespace SoulsFormats.Formats
             info.StringDataLength = uintW();
             info.StringDataOffset = uintW();
 
-            if (Game == Game.DS1) zeroW();
+            if (IsDS1) zeroW();
 
             #endregion
 
@@ -126,11 +128,11 @@ namespace SoulsFormats.Formats
             StringDataLength = 0;
 
             bw.WriteASCII("EVD\0");
-            if (Game == Game.DS1)
+            if (IsDS1)
             {
                 bw.WriteUInt32(0x00000000);
                 bw.WriteUInt32(0x000000CC);
-            } else if (Game == Game.BB)
+            } else if (IsBB)
             {
                 bw.WriteUInt32(0x0000FF00);
                 bw.WriteUInt32(0x000000CC);
@@ -253,13 +255,13 @@ namespace SoulsFormats.Formats
                 br.StepOut();
 
                 long paramCount = uintW();
-                long paramOffset = File.Game == Game.BB ? br.ReadUInt32() : sintW();
+                long paramOffset = File.IsBB ? br.ReadUInt32() : sintW();
                 br.StepIn(info.ParameterOffset + paramOffset);
                 for (long i = 0; i < paramCount; i++)
                     Parameters.Add(new Parameter(br, info));
                 br.StepOut();
 
-                if (File.Game == Game.BB) br.AssertUInt32(0);
+                if (File.IsBB) br.AssertUInt32(0);
                 BonfireHandler = br.ReadEnum32<BonfireHandler>();
                 br.AssertUInt32(0);
             }
@@ -278,8 +280,8 @@ namespace SoulsFormats.Formats
 
                 if (Parameters.Count == 0)
                 {
-                    if (File.Game == Game.DS1) bw.WriteInt32(-1);
-                    else if (File.Game == Game.BB)
+                    if (File.IsDS1) bw.WriteInt32(-1);
+                    else if (File.IsBB)
                     {
                         bw.WriteInt32(-1);
                         bw.WriteInt32(0);
@@ -344,7 +346,7 @@ namespace SoulsFormats.Formats
                 Arguments = ReadArgs(br);
                 br.StepOut();
 
-                long insLayOffset = File.Game == Game.DS3 ? br.ReadInt64() : br.ReadInt32();
+                long insLayOffset = File.IsDS3 ? br.ReadInt64() : br.ReadInt32();
                 if (File.Game != Game.DS3) br.AssertInt32(0);
                 if (insLayOffset != -1)
                 {
@@ -419,7 +421,7 @@ namespace SoulsFormats.Formats
                 if (!File.IsDS1) bw.WriteInt32(0);
 
 
-                if (File.Game == Game.DS3)
+                if (File.IsDS3)
                 {
                     bw.WriteInt64(File.ArgDataLength);
                 } else
@@ -479,15 +481,6 @@ namespace SoulsFormats.Formats
             }
         }
 
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
-        /* EVERYTHING BELOW HERE IS UNFINISHED */
         public class Layer
         {
             public EMEVD File;
@@ -534,6 +527,15 @@ namespace SoulsFormats.Formats
 
             }
         }
+
+        /* 
+         * 
+         * 
+         * EVERYTHING BELOW HERE IS UNFINISHED
+         * 
+         * 
+         */
+
 
         public class Parameter
         {
