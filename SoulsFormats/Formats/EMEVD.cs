@@ -12,7 +12,6 @@ namespace SoulsFormats.Formats
 
     public class EMEVD : SoulsFile<EMEVD>
     {
-
         public Game Game { get; set; }
         public List<Event> Events = new List<Event>();
 
@@ -489,8 +488,6 @@ namespace SoulsFormats.Formats
         /* EVERYTHING BELOW HERE IS UNFINISHED */
         /* EVERYTHING BELOW HERE IS UNFINISHED */
         /* EVERYTHING BELOW HERE IS UNFINISHED */
-
-
         public class Layer
         {
             public EMEVD File;
