@@ -333,6 +333,11 @@ namespace SoulsFormats.ESD.EzSemble
                         var item = stack.Pop();
                         stack.Push($"AbortIfFalse({item})");
                     }
+                    else if (b == 0xB8)
+                    {
+                        var item = stack.Pop();
+                        stack.Push($"StateGroupArg[{item}]");
+                    }
                     else if (b == 0xA1)
                     {
                         //break;
